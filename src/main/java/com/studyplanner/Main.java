@@ -188,7 +188,7 @@ public class Main {
         }
         
         // Use AI service to prioritize tasks
-        System.out.println("\nPrioritizing tasks using AI...");
+        System.out.println("\nPrioritizing tasks...");
         List<Task> prioritizedTasks = llmService.prioritizeTasks(tasks);
         
         System.out.println("Tasks prioritized! Generating schedule...");

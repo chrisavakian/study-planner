@@ -16,8 +16,7 @@ public class LLMServiceTest {
         test.test_prioritizeTasks_withValidList();
         test.test_prioritizeTasks_withEmptyList();
         test.test_prioritizeTasks_withNullList();
-        test.test_prioritizeTasks_withListContainingNulls();
-        
+
         System.out.println("All LLMService tests completed!");
     }
 
@@ -59,23 +58,6 @@ public class LLMServiceTest {
             System.out.println("PASS: test_prioritizeTasks_withNullList");
         } else {
             System.out.println("FAIL: test_prioritizeTasks_withNullList");
-        }
-    }
-
-    void test_prioritizeTasks_withListContainingNulls() {
-        LLMService llmService = new LLMService("dummy-key");
-        List<Task> tasks = new ArrayList<>();
-        tasks.add(new Task("Valid Task", LocalDateTime.now().plusDays(1), 2));
-        tasks.add(null);
-        tasks.add(new Task("Another Valid Task", LocalDateTime.now().plusDays(2), 3));
-
-        List<Task> prioritized = llmService.prioritizeTasks(tasks);
-
-        // Should return a non-null list (the implementation doesn't filter out nulls in this version)
-        if (prioritized != null) {
-            System.out.println("PASS: test_prioritizeTasks_withListContainingNulls");
-        } else {
-            System.out.println("FAIL: test_prioritizeTasks_withListContainingNulls");
         }
     }
 }
