@@ -1,9 +1,6 @@
 package com.studyplanner.scheduler;
 
 import com.studyplanner.models.*;
-import java.time.DayOfWeek;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**

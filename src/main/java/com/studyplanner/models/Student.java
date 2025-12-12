@@ -4,6 +4,7 @@ import com.studyplanner.observer.StudyObserver;
 
 import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,6 +12,7 @@ import java.util.List;
  * Represents a student with ID, name, task list, availability, and schedule.
  */
 public class Student {
+    private static final long DEADLINE_APPROACHING_THRESHOLD_HOURS = 48;
     private String studentID;
     private String name;
     private List<Task> taskList;
@@ -42,6 +44,18 @@ public class Student {
      * @throws IllegalArgumentException if title is empty or effort is negative
      */
     public Task addTask(String title, LocalDateTime deadline, int effort) {
+        validateTaskParameters(title, deadline, effort);
+
+        Task task = new Task(title, deadline, effort);
+        taskList.add(task);
+
+        // Notify observers that a new task has been added
+        notifyTaskAdded(task);
+
+        return task;
+    }
+
+    private void validateTaskParameters(String title, LocalDateTime deadline, int effort) {
         if (title == null || title.trim().isEmpty()) {
             throw new IllegalArgumentException("Task title cannot be empty");
         }
@@ -51,14 +65,6 @@ public class Student {
         if (deadline.isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Task deadline cannot be in the past");
         }
-
-        Task task = new Task(title, deadline, effort);
-        taskList.add(task);
-
-        // Notify observers that a new task has been added
-        notifyTaskAdded(task);
-
-        return task;
     }
 
     /**
@@ -99,12 +105,16 @@ public class Student {
      * @param task the task to check
      */
     private void checkDeadlineApproaching(Task task) {
-        long hoursUntilDeadline = java.time.Duration.between(LocalDateTime.now(), task.getDeadline()).toHours();
-        if (hoursUntilDeadline <= 48 && hoursUntilDeadline > 0) { // Within 2 days
+        long hoursUntilDeadline = ChronoUnit.HOURS.between(LocalDateTime.now(), task.getDeadline());
+        if (isDeadlineApproaching(hoursUntilDeadline)) {
             for (StudyObserver observer : observers) {
                 observer.onTaskDeadlineApproaching(task);
             }
         }
+    }
+
+    private boolean isDeadlineApproaching(long hoursUntilDeadline) {
+        return hoursUntilDeadline <= DEADLINE_APPROACHING_THRESHOLD_HOURS && hoursUntilDeadline > 0;
     }
 
     /**
@@ -114,23 +124,25 @@ public class Student {
      * @throws IllegalArgumentException if availability has overlapping times
      */
     public void setAvailability(List<Availability> availability) {
-        // Check for overlapping times
+        validateAvailabilityForOverlaps(availability);
+        this.availability = availability;
+    }
+
+    private void validateAvailabilityForOverlaps(List<Availability> availability) {
         for (int i = 0; i < availability.size(); i++) {
             for (int j = i + 1; j < availability.size(); j++) {
                 Availability a1 = availability.get(i);
                 Availability a2 = availability.get(j);
-                
-                if (a1.getDay() == a2.getDay()) {
-                    // Check if time ranges overlap
-                    if (!(a1.getEnd().compareTo(a2.getStart()) <= 0 || 
-                          a2.getEnd().compareTo(a1.getStart()) <= 0)) {
-                        throw new IllegalArgumentException("Availability slots cannot overlap on the same day");
-                    }
+
+                if (a1.getDay() == a2.getDay() && hasTimeOverlap(a1, a2)) {
+                    throw new IllegalArgumentException("Availability slots cannot overlap on the same day");
                 }
             }
         }
-        
-        this.availability = availability;
+    }
+
+    private boolean hasTimeOverlap(Availability a1, Availability a2) {
+        return !(a1.getEnd().compareTo(a2.getStart()) <= 0 || a2.getEnd().compareTo(a1.getStart()) <= 0);
     }
 
     /**
@@ -149,24 +161,29 @@ public class Student {
      * @throws IllegalArgumentException if the session is not found in the schedule
      */
     public void markSessionComplete(Session session) {
-        if (this.schedule == null) {
-            throw new IllegalStateException("No schedule exists yet");
-        }
-
-        boolean found = false;
-        for (Session s : this.schedule.getSessions()) {
-            if (s == session) {
-                s.complete();
-                found = true;
-                // Notify observers that a session has been completed
-                notifySessionCompleted(session);
-                break;
-            }
-        }
-
+        validateScheduleExists();
+        boolean found = markSessionAsComplete(session);
         if (!found) {
             throw new IllegalArgumentException("Session not found in the current schedule");
         }
+    }
+
+    private void validateScheduleExists() {
+        if (this.schedule == null) {
+            throw new IllegalStateException("No schedule exists yet");
+        }
+    }
+
+    private boolean markSessionAsComplete(Session sessionToComplete) {
+        for (Session s : this.schedule.getSessions()) {
+            if (s == sessionToComplete) {
+                s.complete();
+                // Notify observers that a session has been completed
+                notifySessionCompleted(sessionToComplete);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -252,7 +269,7 @@ public class Student {
         for (StudyObserver observer : observers) {
             // We could implement a onTaskRemoved method in the interface
             // For now, we'll just print a message
-            System.out.println("Task removed: " + task.getTitle());
+            observer.notify();
         }
     }
 }

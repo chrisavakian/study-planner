@@ -1,4 +1,4 @@
-package main.java.com.studyplanner.Factory;
+package com.studyplanner.factory;
 
 /**
  * Enum representing different types of tasks.

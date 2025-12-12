@@ -4,8 +4,6 @@ import java.time.LocalDate;
 import java.time.DayOfWeek;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.HashMap;
 
 /**
  * Represents a weekly study schedule with sessions.
@@ -40,14 +38,18 @@ public class Schedule {
      */
     public List<Session> viewDaily(DayOfWeek day) {
         List<Session> dailySessions = new ArrayList<>();
-        
+
         for (Session session : sessions) {
-            if (session.getStartTime().getDayOfWeek() == day) {
+            if (isSessionOnDay(session, day)) {
                 dailySessions.add(session);
             }
         }
-        
+
         return dailySessions;
+    }
+
+    private boolean isSessionOnDay(Session session, DayOfWeek day) {
+        return session.getStartTime().getDayOfWeek() == day;
     }
 
     // Getters and setters

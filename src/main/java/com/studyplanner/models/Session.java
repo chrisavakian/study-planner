@@ -18,9 +18,7 @@ public class Session {
      * @param endTime   the end time of the session
      */
     public Session(LocalDateTime startTime, LocalDateTime endTime) {
-        this.startTime = startTime;
-        this.endTime = endTime;
-        this.completed = false;
+        this(startTime, endTime, null);
     }
 
     /**

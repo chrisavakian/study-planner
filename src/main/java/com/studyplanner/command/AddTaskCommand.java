@@ -10,11 +10,11 @@ import java.time.LocalDateTime;
  * Command to add a task to the student's task list.
  */
 public class AddTaskCommand implements Command {
-    private Student student;
-    private String title;
-    private LocalDateTime deadline;
-    private int effort;
-    private TaskType taskType;
+    private final Student student;
+    private final String title;
+    private final LocalDateTime deadline;
+    private final int effort;
+    private final TaskType taskType;
     private Task createdTask;
     private boolean executed;
 
@@ -34,30 +34,46 @@ public class AddTaskCommand implements Command {
     @Override
     public void execute() {
         if (!executed) {
-            if (taskType != null) {
-                // Use factory to create task with type
-                Task factoryTask = TaskFactory.createTask(taskType, title, deadline, effort);
-                // Add the factory-created task to student using the new method
-                this.createdTask = student.addExistingTask(factoryTask);
-            } else {
-                // Create task normally without factory
-                this.createdTask = student.addTask(title, deadline, effort);
-            }
+            this.createdTask = createAndAddTask();
             this.executed = true;
         }
+    }
+
+    private Task createAndAddTask() {
+        if (isTaskTypeSpecified()) {
+            return addFactoryCreatedTask();
+        } else {
+            return addRegularTask();
+        }
+    }
+
+    private boolean isTaskTypeSpecified() {
+        return taskType != null;
+    }
+
+    private Task addFactoryCreatedTask() {
+        Task factoryTask = TaskFactory.createTask(taskType, title, deadline, effort);
+        return student.addExistingTask(factoryTask);
+    }
+
+    private Task addRegularTask() {
+        return student.addTask(title, deadline, effort);
     }
 
     @Override
     public void undo() {
         if (executed && createdTask != null) {
-            // Remove the task from the student's list
-            boolean removed = student.removeTask(createdTask);
-            if (removed) {
-                System.out.println("Task '" + title + "' has been removed (undo complete).");
-            } else {
-                System.out.println("Could not remove task '" + title + "', may have already been removed.");
-            }
+            performUndo();
             this.executed = false;
+        }
+    }
+
+    private void performUndo() {
+        boolean removed = student.removeTask(createdTask);
+        if (removed) {
+            System.out.println("Task '" + title + "' has been removed (undo complete).");
+        } else {
+            System.out.println("Could not remove task '" + title + "', may have already been removed.");
         }
     }
 

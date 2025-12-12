@@ -7,8 +7,8 @@ import com.studyplanner.models.Session;
  * Command to mark a session as complete.
  */
 public class CompleteSessionCommand implements Command {
-    private Student student;
-    private Session session;
+    private final Student student;
+    private final Session session;
     private boolean wasCompleted;
     private boolean executed;
 
@@ -21,20 +21,36 @@ public class CompleteSessionCommand implements Command {
 
     @Override
     public void execute() {
-        if (!executed && !session.isCompleted()) {
-            student.markSessionComplete(session);
-            this.executed = true;
+        if (canExecute()) {
+            performExecute();
         }
+    }
+
+    private boolean canExecute() {
+        return !executed && !session.isCompleted();
+    }
+
+    private void performExecute() {
+        student.markSessionComplete(session);
+        this.executed = true;
     }
 
     @Override
     public void undo() {
-        if (executed && !wasCompleted) {
-            // Reset the session to incomplete state using the setter method
-            session.setCompleted(false);
-            System.out.println("Session completion has been undone. Session is now marked as incomplete.");
+        if (canUndo()) {
+            performUndo();
             this.executed = false;
         }
+    }
+
+    private boolean canUndo() {
+        return executed && !wasCompleted;
+    }
+
+    private void performUndo() {
+        // Reset the session to incomplete state using the setter method
+        session.setCompleted(false);
+        System.out.println("Session completion has been undone. Session is now marked as incomplete.");
     }
 
     @Override

@@ -1,4 +1,4 @@
-package main.java.com.studyplanner.Factory;
+package com.studyplanner.factory;
 
 import com.studyplanner.models.Task;
 import java.time.LocalDateTime;
