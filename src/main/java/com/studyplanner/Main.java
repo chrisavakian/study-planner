@@ -1,8 +1,11 @@
 package com.studyplanner;
 
+import com.studyplanner.command.*;
+import com.studyplanner.factory.*;
 import com.studyplanner.models.*;
+import com.studyplanner.observer.*;
 import com.studyplanner.services.LLMService;
-import com.studyplanner.scheduler.Scheduler;
+import com.studyplanner.scheduler.*;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
@@ -19,6 +22,7 @@ import java.util.Scanner;
  */
 public class Main {
     private static Scanner scanner = new Scanner(System.in);
+    private static CommandManager commandManager = new CommandManager();
 
     public static void main(String[] args) {
         System.out.println("=== Smart Study Planner ===\n");
@@ -28,13 +32,18 @@ public class Main {
         String name = scanner.nextLine().trim();
         System.out.print("Enter your student ID: ");
         String id = scanner.nextLine().trim();
-        
+
         Student student = new Student(id, name);
+
+        // Add observer for notifications
+        NotificationService notificationService = new NotificationService();
+        student.addObserver(notificationService);
+
         System.out.println("\nWelcome, " + student.getName() + "!\n");
 
         // Hardcoded API key
         String apiKey = "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";
-        LLMService llmService = new LLMService(apiKey);
+        LLMService llmService = LLMService.getInstance(apiKey);
 
         // Get availability from user
         List<Availability> availability = getAvailabilityFromUser();
@@ -49,7 +58,9 @@ public class Main {
             System.out.println("3. Generate schedule");
             System.out.println("4. View schedule");
             System.out.println("5. Mark session as complete");
-            System.out.println("6. Exit");
+            System.out.println("6. Undo last action");
+            System.out.println("7. Redo last action");
+            System.out.println("8. Exit");
             System.out.print("Choose an option: ");
 
             String choice = scanner.nextLine().trim();
@@ -71,6 +82,12 @@ public class Main {
                     markSessionComplete(student);
                     break;
                 case "6":
+                    commandManager.undo();
+                    break;
+                case "7":
+                    commandManager.redo();
+                    break;
+                case "8":
                     running = false;
                     System.out.println("Thank you for using Smart Study Planner!");
                     break;
@@ -125,15 +142,44 @@ public class Main {
         System.out.println("\n=== Add a Task ===");
         System.out.print("Task title: ");
         String title = scanner.nextLine().trim();
-        
+
         if (title.isEmpty()) {
             System.out.println("Task title cannot be empty!");
             return;
         }
 
+        // Task type selection
+        System.out.println("Select task type:");
+        System.out.println("1. Assignment");
+        System.out.println("2. Exam");
+        System.out.println("3. Project");
+        System.out.println("4. Review");
+        System.out.print("Enter choice (1-4): ");
+        String typeChoice = scanner.nextLine().trim();
+
+        TaskType taskType;
+        switch (typeChoice) {
+            case "1":
+                taskType = TaskType.ASSIGNMENT;
+                break;
+            case "2":
+                taskType = TaskType.EXAM;
+                break;
+            case "3":
+                taskType = TaskType.PROJECT;
+                break;
+            case "4":
+                taskType = TaskType.REVIEW;
+                break;
+            default:
+                System.out.println("Invalid choice, using default type.");
+                taskType = TaskType.ASSIGNMENT;
+                break;
+        }
+
         System.out.print("Deadline (YYYY-MM-DD HH:MM format): ");
         String deadlineStr = scanner.nextLine().trim();
-        
+
         LocalDateTime deadline;
         try {
             deadline = LocalDateTime.parse(deadlineStr, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
@@ -156,12 +202,9 @@ public class Main {
             return;
         }
 
-        try {
-            Task task = student.addTask(title, deadline, effort);
-            System.out.println("Task added successfully: " + task.getTitle());
-        } catch (IllegalArgumentException e) {
-            System.out.println("Error adding task: " + e.getMessage());
-        }
+        // Use Command pattern with task type
+        Command addTaskCommand = new AddTaskCommand(student, title, deadline, effort, taskType);
+        commandManager.executeCommand(addTaskCommand);
     }
 
     private static void viewTasks(Student student) {
@@ -186,18 +229,41 @@ public class Main {
             System.out.println("\nNo tasks available to schedule. Add tasks first.");
             return;
         }
-        
+
         // Use AI service to prioritize tasks
         System.out.println("\nPrioritizing tasks...");
         List<Task> prioritizedTasks = llmService.prioritizeTasks(tasks);
-        
-        System.out.println("Tasks prioritized! Generating schedule...");
-        
-        // Generate schedule
+
+        System.out.println("Tasks prioritized! Select scheduling strategy:");
+        System.out.println("1. Priority-based (prioritizes urgent tasks)");
+        System.out.println("2. Time-block (creates consistent study blocks)");
+        System.out.println("3. Balanced (balances urgency with optimal times)");
+        System.out.print("Choose strategy (1-3): ");
+        String strategyChoice = scanner.nextLine().trim();
+
+        // Generate schedule with selected strategy
         Scheduler scheduler = new Scheduler();
+
+        switch (strategyChoice) {
+            case "1":
+                scheduler.setStrategy(new PrioritySchedulerStrategy());
+                break;
+            case "2":
+                scheduler.setStrategy(new TimeBlockSchedulerStrategy());
+                break;
+            case "3":
+                scheduler.setStrategy(new BalancedSchedulerStrategy());
+                break;
+            default:
+                System.out.println("Invalid choice, using priority-based strategy.");
+                scheduler.setStrategy(new PrioritySchedulerStrategy());
+                break;
+        }
+
+        System.out.println("Generating schedule...");
         Schedule schedule = scheduler.generateSchedule(prioritizedTasks, student.getAvailability());
         student.setSchedule(schedule);
-        
+
         System.out.println("Schedule generated successfully!");
     }
 
@@ -236,39 +302,42 @@ public class Main {
             System.out.println("\nNo schedule available. Generate a schedule first.");
             return;
         }
-        
+
         // Show available sessions to complete
         List<Session> allSessions = schedule.getSessions();
         System.out.println("\n=== Available Sessions ===");
         for (int i = 0; i < allSessions.size(); i++) {
             Session session = allSessions.get(i);
             String status = session.isCompleted() ? "COMPLETED" : "PENDING";
-            System.out.println((i + 1) + ". " + 
-                             session.getStartTime().toLocalDate().getDayOfWeek() + 
-                             " " + session.getStartTime().toLocalTime().toString() + 
-                             "-" + session.getEndTime().toLocalTime().toString() + 
+            System.out.println((i + 1) + ". " +
+                             session.getStartTime().toLocalDate().getDayOfWeek() +
+                             " " + session.getStartTime().toLocalTime().toString() +
+                             "-" + session.getEndTime().toLocalTime().toString() +
                              " [" + status + "]");
         }
-        
+
         System.out.print("Enter session number to mark as complete: ");
         String input = scanner.nextLine().trim();
-        
+
         try {
             int sessionIndex = Integer.parseInt(input) - 1;
             if (sessionIndex < 0 || sessionIndex >= allSessions.size()) {
                 System.out.println("Invalid session number!");
                 return;
             }
-            
+
             Session sessionToComplete = allSessions.get(sessionIndex);
             if (sessionToComplete.isCompleted()) {
                 System.out.println("Session is already marked as complete!");
                 return;
             }
-            
-            student.markSessionComplete(sessionToComplete);
+
+            // Use Command pattern to mark session complete
+            Command completeSessionCommand = new CompleteSessionCommand(student, sessionToComplete);
+            commandManager.executeCommand(completeSessionCommand);
+
             System.out.println("Session marked as complete!");
-            
+
         } catch (NumberFormatException e) {
             System.out.println("Invalid input! Please enter a number.");
         } catch (Exception e) {
