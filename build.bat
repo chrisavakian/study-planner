@@ -4,7 +4,7 @@ echo Building Smart Study Planner...
 if not exist bin mkdir bin
 
 echo Compiling main source files...
-javac -d bin src\main\java\com\studyplanner\models\*.java src\main\java\com\studyplanner\services\*.java src\main\java\com\studyplanner\scheduler\*.java src\main\java\com\studyplanner\*.java
+javac -d bin src\main\java\com\studyplanner\command\*.java src\main\java\com\studyplanner\factory\*.java src\main\java\com\studyplanner\models\*.java src\main\java\com\studyplanner\observer\*.java src\main\java\com\studyplanner\services\*.java src\main\java\com\studyplanner\scheduler\*.java src\main\java\com\studyplanner\*.java
 
 if %ERRORLEVEL% NEQ 0 (
     echo Compilation failed!
