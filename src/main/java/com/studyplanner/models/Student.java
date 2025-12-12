@@ -1,7 +1,10 @@
 package com.studyplanner.models;
 
+import com.studyplanner.observer.StudyObserver;
+
 import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -9,11 +12,13 @@ import java.util.List;
  * Represents a student with ID, name, task list, availability, and schedule.
  */
 public class Student {
+    private static final long DEADLINE_APPROACHING_THRESHOLD_HOURS = 48;
     private String studentID;
     private String name;
     private List<Task> taskList;
     private List<Availability> availability;
     private Schedule schedule;
+    private List<StudyObserver> observers;
 
     /**
      * Constructs a new Student with the specified ID and name.
@@ -26,6 +31,7 @@ public class Student {
         this.name = name;
         this.taskList = new ArrayList<>();
         this.availability = new ArrayList<>();
+        this.observers = new ArrayList<>();
     }
 
     /**
@@ -38,6 +44,18 @@ public class Student {
      * @throws IllegalArgumentException if title is empty or effort is negative
      */
     public Task addTask(String title, LocalDateTime deadline, int effort) {
+        validateTaskParameters(title, deadline, effort);
+
+        Task task = new Task(title, deadline, effort);
+        taskList.add(task);
+
+        // Notify observers that a new task has been added
+        notifyTaskAdded(task);
+
+        return task;
+    }
+
+    private void validateTaskParameters(String title, LocalDateTime deadline, int effort) {
         if (title == null || title.trim().isEmpty()) {
             throw new IllegalArgumentException("Task title cannot be empty");
         }
@@ -47,10 +65,56 @@ public class Student {
         if (deadline.isBefore(LocalDateTime.now())) {
             throw new IllegalArgumentException("Task deadline cannot be in the past");
         }
+    }
 
-        Task task = new Task(title, deadline, effort);
-        taskList.add(task);
-        return task;
+    /**
+     * Adds an observer to the student.
+     *
+     * @param observer the observer to add
+     */
+    public void addObserver(StudyObserver observer) {
+        observers.add(observer);
+    }
+
+    /**
+     * Removes an observer from the student.
+     *
+     * @param observer the observer to remove
+     */
+    public void removeObserver(StudyObserver observer) {
+        observers.remove(observer);
+    }
+
+    /**
+     * Notifies all observers that a task has been added.
+     *
+     * @param task the task that was added
+     */
+    private void notifyTaskAdded(Task task) {
+        for (StudyObserver observer : observers) {
+            observer.onTaskAdded(task);
+        }
+
+        // Check if the task deadline is approaching and notify if needed
+        checkDeadlineApproaching(task);
+    }
+
+    /**
+     * Checks if the task deadline is approaching and notifies observers.
+     *
+     * @param task the task to check
+     */
+    private void checkDeadlineApproaching(Task task) {
+        long hoursUntilDeadline = ChronoUnit.HOURS.between(LocalDateTime.now(), task.getDeadline());
+        if (isDeadlineApproaching(hoursUntilDeadline)) {
+            for (StudyObserver observer : observers) {
+                observer.onTaskDeadlineApproaching(task);
+            }
+        }
+    }
+
+    private boolean isDeadlineApproaching(long hoursUntilDeadline) {
+        return hoursUntilDeadline <= DEADLINE_APPROACHING_THRESHOLD_HOURS && hoursUntilDeadline > 0;
     }
 
     /**
@@ -60,23 +124,25 @@ public class Student {
      * @throws IllegalArgumentException if availability has overlapping times
      */
     public void setAvailability(List<Availability> availability) {
-        // Check for overlapping times
+        validateAvailabilityForOverlaps(availability);
+        this.availability = availability;
+    }
+
+    private void validateAvailabilityForOverlaps(List<Availability> availability) {
         for (int i = 0; i < availability.size(); i++) {
             for (int j = i + 1; j < availability.size(); j++) {
                 Availability a1 = availability.get(i);
                 Availability a2 = availability.get(j);
-                
-                if (a1.getDay() == a2.getDay()) {
-                    // Check if time ranges overlap
-                    if (!(a1.getEnd().compareTo(a2.getStart()) <= 0 || 
-                          a2.getEnd().compareTo(a1.getStart()) <= 0)) {
-                        throw new IllegalArgumentException("Availability slots cannot overlap on the same day");
-                    }
+
+                if (a1.getDay() == a2.getDay() && hasTimeOverlap(a1, a2)) {
+                    throw new IllegalArgumentException("Availability slots cannot overlap on the same day");
                 }
             }
         }
-        
-        this.availability = availability;
+    }
+
+    private boolean hasTimeOverlap(Availability a1, Availability a2) {
+        return !(a1.getEnd().compareTo(a2.getStart()) <= 0 || a2.getEnd().compareTo(a1.getStart()) <= 0);
     }
 
     /**
@@ -95,21 +161,39 @@ public class Student {
      * @throws IllegalArgumentException if the session is not found in the schedule
      */
     public void markSessionComplete(Session session) {
+        validateScheduleExists();
+        boolean found = markSessionAsComplete(session);
+        if (!found) {
+            throw new IllegalArgumentException("Session not found in the current schedule");
+        }
+    }
+
+    private void validateScheduleExists() {
         if (this.schedule == null) {
             throw new IllegalStateException("No schedule exists yet");
         }
-        
-        boolean found = false;
+    }
+
+    private boolean markSessionAsComplete(Session sessionToComplete) {
         for (Session s : this.schedule.getSessions()) {
-            if (s == session) {
+            if (s == sessionToComplete) {
                 s.complete();
-                found = true;
-                break;
+                // Notify observers that a session has been completed
+                notifySessionCompleted(sessionToComplete);
+                return true;
             }
         }
-        
-        if (!found) {
-            throw new IllegalArgumentException("Session not found in the current schedule");
+        return false;
+    }
+
+    /**
+     * Notifies all observers that a session has been completed.
+     *
+     * @param session the session that was completed
+     */
+    private void notifySessionCompleted(Session session) {
+        for (StudyObserver observer : observers) {
+            observer.onSessionCompleted(session);
         }
     }
 
@@ -148,5 +232,44 @@ public class Student {
 
     public Schedule getSchedule() {
         return this.schedule;
+    }
+
+    /**
+     * Removes a task from the student's task list.
+     *
+     * @param task the task to remove
+     * @return true if the task was removed, false if it wasn't in the list
+     */
+    public boolean removeTask(Task task) {
+        boolean removed = taskList.remove(task);
+        if (removed) {
+            notifyTaskRemoved(task);
+        }
+        return removed;
+    }
+
+    /**
+     * Adds an existing task object to the student's task list.
+     *
+     * @param task the task object to add
+     * @return the added task
+     */
+    public Task addExistingTask(Task task) {
+        taskList.add(task);
+        notifyTaskAdded(task);
+        return task;
+    }
+
+    /**
+     * Notifies all observers that a task has been removed.
+     *
+     * @param task the task that was removed
+     */
+    private void notifyTaskRemoved(Task task) {
+        for (StudyObserver observer : observers) {
+            // We could implement a onTaskRemoved method in the interface
+            // For now, we'll just print a message
+            observer.notify();
+        }
     }
 }

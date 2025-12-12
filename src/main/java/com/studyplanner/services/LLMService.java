@@ -2,18 +2,28 @@ package com.studyplanner.services;
 
 import com.studyplanner.models.Task;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Service that uses Nvidia NIM API to prioritize and annotate tasks.
+ * Implemented as a Singleton to ensure only one instance exists.
  */
 public class LLMService {
+    private static LLMService instance;
     private OpenAIService openAIService;
 
     public LLMService(String apiKey) {
         this.openAIService = new OpenAIService(apiKey);
+    }
+
+    public static synchronized LLMService getInstance(String apiKey) {
+        if (instance == null) {
+            instance = new LLMService(apiKey);
+        }
+        // Note: If apiKey is different, we'd need to handle that case differently
+        // For now, we'll return the existing instance if one exists
+        return instance;
     }
 
     /**
@@ -24,29 +34,24 @@ public class LLMService {
      * @return a new list of tasks ordered by priority
      */
     public List<Task> prioritizeTasks(List<Task> taskList) {
-        if (taskList == null || taskList.isEmpty()) {
+        if (isTaskListNullOrEmpty(taskList)) {
             return new ArrayList<>();
         }
 
-        // Create a prompt for the AI to prioritize tasks
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Please prioritize the following study tasks based on urgency and importance. Consider the deadline (how soon it's due) and effort (how much time it needs) when determining priority:\n\n");
-        
-        for (int i = 0; i < taskList.size(); i++) {
-            Task task = taskList.get(i);
-            prompt.append(String.format("%d. Task: %s, Deadline: %s, Effort: %d hours\n", 
-                      i + 1, task.getTitle(), task.getDeadline(), task.getEffort()));
-        }
-        
-        prompt.append("\nReturn ONLY the task numbers in priority order (from highest priority to lowest), separated by commas. For example: 3, 1, 2. Do not include any other text.");
-
-        // Call the Nvidia NIM service to prioritize tasks
         String response = openAIService.prioritizeTasksWithOpenAI(taskList);
-        
+
         // If we get a valid response, try to parse the order
         // For now, we'll implement a basic sorting based on deadline and effort
+        return createPrioritizedTaskList(taskList);
+    }
+
+    private boolean isTaskListNullOrEmpty(List<Task> taskList) {
+        return taskList == null || taskList.isEmpty();
+    }
+
+    private List<Task> createPrioritizedTaskList(List<Task> taskList) {
         List<Task> prioritizedList = new ArrayList<>(taskList);
-        
+
         // Sort by deadline first (soonest first), then by effort (highest first as more important)
         prioritizedList.sort((t1, t2) -> {
             // Compare deadlines first
@@ -57,7 +62,7 @@ public class LLMService {
             // If deadlines are the same, sort by effort descending (higher effort = higher priority)
             return Integer.compare(t2.getEffort(), t1.getEffort());
         });
-        
+
         return prioritizedList;
     }
 
@@ -75,13 +80,17 @@ public class LLMService {
         for (Task task : taskList) {
             if (task != null) {
                 // In a real application, this would call the OpenAI API for annotations
-                System.out.println("Annotating task: " + task.getTitle() + 
-                    " with deadline: " + task.getDeadline() + 
-                    " and effort: " + task.getEffort() + " hours");
+                logTaskAnnotation(task);
             }
         }
 
         return taskList;
+    }
+
+    private void logTaskAnnotation(Task task) {
+        System.out.println("Annotating task: " + task.getTitle() +
+            " with deadline: " + task.getDeadline() +
+            " and effort: " + task.getEffort() + " hours");
     }
 
     public void setApiKey(String apiKey) {

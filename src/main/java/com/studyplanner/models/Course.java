@@ -7,6 +7,8 @@ import java.util.List;
  * Represents a course with name, instructor, and associated tasks.
  */
 public class Course {
+    private static final String NULL_TASK_ERROR = "Task cannot be null";
+
     private String courseName;
     private String instructor;
     private List<Task> tasks;
@@ -30,11 +32,15 @@ public class Course {
      * @throws IllegalArgumentException if the task is null
      */
     public void associateTasks(Task task) {
-        if (task == null) {
-            throw new IllegalArgumentException("Task cannot be null");
-        }
+        validateTaskNotNull(task);
         this.tasks.add(task);
         task.setCourse(this);
+    }
+
+    private void validateTaskNotNull(Task task) {
+        if (task == null) {
+            throw new IllegalArgumentException(NULL_TASK_ERROR);
+        }
     }
 
     // Getters and setters

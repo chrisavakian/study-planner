@@ -10,6 +10,7 @@ import java.util.List;
  * Represents a study task with title, deadline, effort, course, and sessions.
  */
 public class Task {
+    private static final int MAX_SESSION_DURATION_HOURS = 2;
     private String title;
     private LocalDateTime deadline;
     private int effort; // effort in hours
@@ -38,24 +39,28 @@ public class Task {
      */
     public List<Session> splitIntoSessions() {
         sessions.clear();
-        
         int remainingEffort = this.effort;
-        
+
         while (remainingEffort > 0) {
-            int sessionDuration = Math.min(2, remainingEffort); // Max 2 hours per session
-            
-            // Create a session placeholder without specific time (time will be assigned by scheduler)
-            // Use a reference time for duration calculation
-            LocalDateTime sessionStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
-            LocalDateTime sessionEnd = sessionStart.plusHours(sessionDuration);
-            
-            Session session = new Session(sessionStart, sessionEnd, this); // Link session to this task
+            int sessionDuration = calculateSessionDuration(remainingEffort);
+            Session session = createSessionPlaceholder(sessionDuration);
             sessions.add(session);
-            
             remainingEffort -= sessionDuration;
         }
-        
+
         return sessions;
+    }
+
+    private int calculateSessionDuration(int remainingEffort) {
+        return Math.min(MAX_SESSION_DURATION_HOURS, remainingEffort);
+    }
+
+    private Session createSessionPlaceholder(int sessionDuration) {
+        // Create a session placeholder without specific time (time will be assigned by scheduler)
+        // Use a reference time for duration calculation
+        LocalDateTime sessionStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
+        LocalDateTime sessionEnd = sessionStart.plusHours(sessionDuration);
+        return new Session(sessionStart, sessionEnd, this); // Link session to this task
     }
 
     /**
@@ -65,10 +70,14 @@ public class Task {
      * @throws IllegalArgumentException if newEffort is negative
      */
     public void updateEstimate(int newEffort) {
+        validateEffort(newEffort);
+        this.effort = newEffort;
+    }
+
+    private void validateEffort(int newEffort) {
         if (newEffort < 0) {
             throw new IllegalArgumentException("Effort cannot be negative");
         }
-        this.effort = newEffort;
     }
 
     // Getters and setters
